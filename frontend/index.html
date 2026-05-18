@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Resume Extractor</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 1400px; margin: 40px auto; padding: 20px;
+    background: #f5f6fa; color: #222;
+  }
+  h1 { margin: 0 0 8px; }
+  .subtitle { color: #666; margin-bottom: 24px; }
+
+  .dropzone {
+    display: block; width: 100%;
+    border: 2px dashed #b0b8c8; border-radius: 12px;
+    padding: 40px 20px; text-align: center;
+    background: #fff; cursor: pointer; transition: all 0.2s;
+  }
+  .dropzone.dragover { border-color: #4a7bff; background: #eef3ff; }
+  .dropzone p { margin: 6px 0; }
+  .dropzone .hint { color: #888; font-size: 14px; }
+  .dropzone input { display: none; }
+
+  .actions { margin-top: 16px; display: flex; gap: 12px; align-items: center; }
+  button {
+    background: #4a7bff; color: #fff; border: 0;
+    padding: 10px 18px; border-radius: 8px; cursor: pointer; font-size: 14px;
+  }
+  button.secondary { background: #6c7280; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .uploads { margin-top: 16px; }
+  .upload-pill {
+    display: inline-block; margin: 4px 6px 0 0;
+    padding: 4px 10px; border-radius: 12px; font-size: 12px;
+  }
+  .upload-pill.loading { background: #fff3cd; color: #846200; }
+  .upload-pill.ok { background: #d6f5dc; color: #1b7a31; }
+  .upload-pill.err { background: #fadddd; color: #a02828; }
+
+  .latest {
+    margin-top: 24px; background: #fff; border-radius: 10px;
+    padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    border-left: 4px solid #4a7bff;
+  }
+  .latest h2 { margin: 0 0 16px; font-size: 18px; }
+  .latest .section { margin-bottom: 16px; }
+  .latest .section h3 {
+    margin: 0 0 8px; font-size: 13px; text-transform: uppercase;
+    color: #6c7280; letter-spacing: 0.5px;
+  }
+  .latest .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px 20px;
+  }
+  .latest .field { font-size: 13px; }
+  .latest .field .label { color: #888; margin-right: 6px; }
+  .latest .field .value { color: #222; font-weight: 500; }
+  .latest .empty-value { color: #bbb; font-style: italic; }
+  .latest .list-item {
+    background: #f7f8fb; padding: 8px 12px; border-radius: 6px;
+    margin-bottom: 6px; font-size: 13px;
+  }
+
+  .section-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 28px 0 12px;
+  }
+  .section-header h2 { margin: 0; font-size: 18px; }
+
+  .table-wrap {
+    background: #fff; border-radius: 10px;
+    overflow: auto; max-height: 70vh;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  table { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 13px; }
+  th, td {
+    padding: 8px 12px; border-bottom: 1px solid #eee;
+    white-space: nowrap; max-width: 280px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  th {
+    background: #f0f3f8; position: sticky; top: 0;
+    text-align: left; font-weight: 600; color: #333;
+  }
+  td:hover { overflow: visible; white-space: normal; background: #fafbff; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .empty { padding: 40px; text-align: center; color: #888; }
+  .count { color: #666; font-size: 14px; margin-left: auto; }
+
+  .delete-btn {
+    background: #e04848; color: #fff; border: 0;
+    padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer;
+  }
+  .delete-btn:hover { background: #c43838; }
+  th.actions-col, td.actions-col {
+    position: sticky; left: 0; background: #fff; z-index: 1;
+    border-right: 1px solid #ddd;
+  }
+  th.actions-col { background: #f0f3f8; }
+</style>
+</head>
+<body>
+
+<h1>Resume Extractor</h1>
+<p class="subtitle">Drop resumes (PDF, DOCX, DOC, or image) — data is extracted and appended to the Excel file.</p>
+
+<label class="dropzone" id="dropzone">
+  <input type="file" id="fileInput" multiple
+         accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,.tiff,.tif,.bmp,.heif">
+  <p><strong>Drag &amp; drop resumes here</strong></p>
+  <p class="hint">or click to choose files (multiple supported)</p>
+</label>
+
+<div class="actions">
+  <button id="downloadBtn">Download Excel</button>
+  <button id="refreshBtn" class="secondary">Refresh table</button>
+  <span class="count" id="count"></span>
+</div>
+
+<div class="uploads" id="uploads"></div>
+
+<div id="latestContainer"></div>
+
+<div class="section-header">
+  <h2>All Resumes</h2>
+</div>
+
+<div class="table-wrap" id="tableWrap">
+  <div class="empty">No resumes uploaded yet.</div>
+</div>
+
+<script>
+const dropzone        = document.getElementById("dropzone");
+const fileInput       = document.getElementById("fileInput");
+const uploads         = document.getElementById("uploads");
+const tableWrap       = document.getElementById("tableWrap");
+const countEl         = document.getElementById("count");
+const latestContainer = document.getElementById("latestContainer");
+
+["dragenter", "dragover"].forEach(evt =>
+  dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.add("dragover"); })
+);
+["dragleave", "drop"].forEach(evt =>
+  dropzone.addEventListener(evt, e => { e.preventDefault(); dropzone.classList.remove("dragover"); })
+);
+dropzone.addEventListener("drop",   e => handleFiles(e.dataTransfer.files));
+fileInput.addEventListener("change", e => handleFiles(e.target.files));
+
+document.getElementById("downloadBtn").onclick = () => window.location.href = "/api/download";
+document.getElementById("refreshBtn").onclick  = loadTable;
+
+async function handleFiles(files) {
+  const pills = [];
+  for (const file of files) {
+    const pill = document.createElement("span");
+    pill.className = "upload-pill loading";
+    pill.textContent = `⏳ ${file.name}`;
+    uploads.prepend(pill);
+    pills.push({ pill, file });
+  }
+
+  for (const { pill, file } of pills) {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Upload failed");
+      pill.className = "upload-pill ok";
+      pill.textContent = `✓ ${file.name}`;
+      renderLatest(data.data);
+    } catch (err) {
+      pill.className = "upload-pill err";
+      pill.textContent = `✗ ${file.name}: ${err.message}`;
+    }
+  }
+  loadTable();
+}
+
+async function loadTable() {
+  try {
+    const res = await fetch("/api/data");
+    const { headers, rows } = await res.json();
+    renderTable(headers, rows);
+    countEl.textContent = `${rows.length} resume${rows.length === 1 ? "" : "s"}`;
+  } catch (err) {
+    tableWrap.innerHTML = `<div class="empty">Failed to load: ${err.message}</div>`;
+  }
+}
+
+function renderTable(headers, rows) {
+  if (!rows.length) {
+    tableWrap.innerHTML = `<div class="empty">No resumes uploaded yet.</div>`;
+    return;
+  }
+  const thead = `<thead><tr>
+    <th class="actions-col">Action</th>
+    ${headers.map(h => `<th>${escapeHtml(h)}</th>`).join("")}
+  </tr></thead>`;
+
+  const tbody = `<tbody>${rows.map(r =>
+    `<tr>
+      <td class="actions-col">
+        <button class="delete-btn" data-row="${r.row_idx}">Delete</button>
+      </td>
+      ${r.cells.map(c =>
+        `<td title="${escapeHtml(String(c ?? ""))}">${escapeHtml(String(c ?? ""))}</td>`
+      ).join("")}
+    </tr>`
+  ).join("")}</tbody>`;
+
+  tableWrap.innerHTML = `<table>${thead}${tbody}</table>`;
+
+  tableWrap.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteRow(parseInt(btn.dataset.row, 10)));
+  });
+}
+
+async function deleteRow(rowIdx) {
+  if (!confirm("Delete this resume from the Excel file?")) return;
+  try {
+    const res = await fetch(`/api/data/${rowIdx}`, { method: "DELETE" });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Delete failed");
+    }
+    loadTable();
+  } catch (err) {
+    alert(`Delete failed: ${err.message}`);
+  }
+}
+
+function v(val) {
+  if (val === null || val === undefined || val === "") {
+    return `<span class="empty-value">—</span>`;
+  }
+  return escapeHtml(String(val));
+}
+
+function field(label, val) {
+  return `<div class="field"><span class="label">${label}:</span><span class="value">${v(val)}</span></div>`;
+}
+
+function renderLatest(d) {
+  let certs = [];
+  let employments = [];
+  try { certs = JSON.parse(d.certifications || "[]"); } catch {}
+  try { employments = JSON.parse(d.previous_employments || "[]"); } catch {}
+
+  const fullName = [d.first_name, d.middle_name, d.last_name].filter(Boolean).join(" ") || "(no name)";
+
+  latestContainer.innerHTML = `
+    <div class="latest">
+      <h2>Latest: ${escapeHtml(fullName)} <span style="color:#888;font-size:13px;font-weight:normal">— ${escapeHtml(d.source_filename || "")}</span></h2>
+
+      <div class="section">
+        <h3>Personal</h3>
+        <div class="grid">
+          ${field("DOB", d.dob)}
+          ${field("Gender", d.gender)}
+          ${field("Marital Status", d.marital_status)}
+          ${field("SSN", d.ssn)}
+          ${field("DL #", d.dl_number)}
+          ${field("DL State", d.dl_state)}
+          ${field("US Citizen", d.is_us_citizen)}
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Contact</h3>
+        <div class="grid">
+          ${field("Address", [d.street_number, d.street_name, d.suite].filter(Boolean).join(" "))}
+          ${field("City", d.city)}
+          ${field("State", d.state)}
+          ${field("Zip", d.zip)}
+          ${field("Home Phone", d.home_phone)}
+          ${field("Work Phone", d.work_phone)}
+          ${field("Email", d.email)}
+          ${field("Other Email", d.other_email)}
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Education</h3>
+        <div class="grid">
+          ${field("High School", d.high_school_name)}
+          ${field("HS Last Year", d.hs_last_year)}
+          ${field("HS Graduated", d.hs_graduated)}
+          ${field("College", d.college_name)}
+          ${field("College Last Year", d.college_last_year)}
+          ${field("College Graduated", d.college_graduated)}
+          ${field("Trade School", d.trade_school_name)}
+          ${field("Trade Last Year", d.trade_last_year)}
+          ${field("Trade Graduated", d.trade_graduated)}
+          ${field("Degrees", d.degrees)}
+          ${field("Awards", d.academic_awards)}
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Emergency Contacts</h3>
+        <div class="grid">
+          ${field("Contact 1", d.emergency_contact_1)}
+          ${field("Relationship 1", d.relationship_1)}
+          ${field("Phone 1", d.phone_1)}
+          ${field("Contact 2", d.emergency_contact_2)}
+          ${field("Relationship 2", d.relationship_2)}
+          ${field("Phone 2", d.phone_2)}
+        </div>
+      </div>
+
+      <div class="section">
+        <h3>Certifications (${certs.length})</h3>
+        ${certs.length === 0
+          ? `<div class="empty-value">None</div>`
+          : certs.map(c => `
+              <div class="list-item">
+                <strong>${v(c.type)}</strong> — ${v(c.organization)}
+                <div style="color:#666;font-size:12px;margin-top:2px;">
+                  Issued: ${v(c.issued_date)} | License #: ${v(c.license_number)}
+                </div>
+              </div>`).join("")}
+      </div>
+
+      <div class="section">
+        <h3>Previous Employments (${employments.length})</h3>
+        ${employments.length === 0
+          ? `<div class="empty-value">None</div>`
+          : employments.map(e => `
+              <div class="list-item">
+                <strong>${v(e.position)}</strong> at ${v(e.employer)}
+                <div style="color:#666;font-size:12px;margin-top:2px;">
+                  ${v(e.start_date)} — ${v(e.end_date)} | Supervisor: ${v(e.supervisor)}
+                </div>
+                <div style="color:#666;font-size:12px;">Reason for leaving: ${v(e.reason_for_leaving)}</div>
+              </div>`).join("")}
+      </div>
+
+      <div class="section">
+        <h3>Meta</h3>
+        <div class="grid">
+          ${field("Uploaded At", d.uploaded_at)}
+          ${field("Source File", d.source_filename)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+loadTable();
+</script>
+</body>
+</html>

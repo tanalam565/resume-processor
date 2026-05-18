@@ -1,0 +1,8 @@
+azure-ai-documentintelligence 
+openai 
+openpyxl
+python-docx
+fastapi
+uvicorn
+python-multipart
+python-dotenv
