@@ -233,6 +233,11 @@ def append_to_excel(row: Dict[str, Any], excel_path: str = "resumes.xlsx") -> No
     """Append a row to the Excel file, creating it with headers if missing."""
     headers = list(RESUME_SCHEMA.keys()) + ["source_filename", "uploaded_at"]
 
+    # Ensure the parent directory exists (important for paths like /home/data/...)
+    parent_dir = os.path.dirname(os.path.abspath(excel_path))
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
+
     if os.path.exists(excel_path):
         wb = load_workbook(excel_path)
         ws = wb.active
