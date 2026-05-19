@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: resume-processor
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
+        sync: false          # set manually in Render dashboard
+      - key: AZURE_DOCUMENT_INTELLIGENCE_KEY
+        sync: false
+      - key: AZURE_OPENAI_API_KEY
+        sync: false
+      - key: AZURE_OPENAI_ENDPOINT
+        sync: false
+      - key: AZURE_OPENAI_DEPLOYMENT_NAME
+        sync: false
+      - key: AZURE_OPENAI_API_VERSION
+        sync: false
+      - key: EXCEL_PATH
+        value: /data/resumes.xlsx   # persistent disk mount path (see disk below)
+    disk:
+      name: resume-data
+      mountPath: /data
+      sizeGB: 1
