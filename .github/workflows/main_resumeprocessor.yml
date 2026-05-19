@@ -73,4 +73,5 @@ jobs:
         with:
           app-name: 'resumeprocessor'
           slot-name: 'Production'
+          startup-command: 'cd /home/site/wwwroot/backend && uvicorn app:app --host 0.0.0.0 --port 8000'
           
